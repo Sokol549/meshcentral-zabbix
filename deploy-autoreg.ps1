@@ -10,7 +10,11 @@ if ($Hostname.Length -gt 128) { throw 'The resulting host name exceeds 128 chara
 if ($Hostname -notmatch '^[A-Za-z0-9_. -]+$' -or $Server -notmatch '^[A-Za-z0-9.:-]+$') { throw 'Invalid hostname or server.' }
 if (-not [Environment]::Is64BitOperatingSystem) { throw 'This installer requires 64-bit Windows.' }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$existingConfig = 'C:\Program Files\Zabbix Agent 2\zabbix_agent2.conf'
+$legacyConfig = 'C:\Program Files\Zabbix Agent 2\zabbix_agent2.conf'
+$existingConfig = 'C:\zabbix\zabbix_agent2.conf'
+if (Test-Path -LiteralPath $legacyConfig) { throw 'An existing agent was found under Program Files. Automatic migration is not supported; no changes were made.' }
+$existingService = Get-CimInstance Win32_Service -Filter "Name='Zabbix Agent 2'" -ErrorAction Stop
+if ($existingService -and $existingService.PathName -notmatch '(?i)^\s*"?C:\\zabbix\\zabbix_agent2\.exe(?:"|\s|$)') { throw 'An existing Zabbix Agent 2 service uses a different path. Automatic migration is not supported.' }
 if ((Test-Path -LiteralPath $existingConfig) -and -not (Test-Path -LiteralPath 'C:\zabbix\autoregistration.psk')) { throw 'An existing agent configuration was detected. It was not changed; contact the administrator before migration.' }
 if (Test-Path -LiteralPath $existingConfig) {
     $currentHost = @(Get-Content -LiteralPath $existingConfig | Where-Object { $_ -match '^\s*Hostname\s*=' })
@@ -23,15 +27,15 @@ function Install-PackageIfMissing($Path, $Id, $Version, $Url, $Sha256, $Kind) {
     Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $installer
     if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne $Sha256) { throw "Checksum mismatch for $Id; installation stopped." }
     if ($Kind -eq 'msi') {
-        $process = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $installer + '"'), '/qn', '/norestart', 'SERVER=127.0.0.1') -Wait -PassThru
+        $process = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $installer + '"'), '/qn', '/norestart', 'SERVER=127.0.0.1', 'INSTALLFOLDER=C:\zabbix', 'IGNOREALREADYEXISTSFOLDER=1') -Wait -PassThru
     } else {
         $process = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru
     }
     if ($process.ExitCode -notin @(0, 3010, 1641) -or -not (Test-Path -LiteralPath $Path)) { throw "Installation failed for $Id (exit $($process.ExitCode)); executable not found or installer failed." }
 }
 $smart = 'C:\Program Files\smartmontools\bin\smartctl.exe'
-$agent = 'C:\Program Files\Zabbix Agent 2\zabbix_agent2.exe'
-$conf = 'C:\Program Files\Zabbix Agent 2\zabbix_agent2.conf'
+$agent = 'C:\zabbix\zabbix_agent2.exe'
+$conf = 'C:\zabbix\zabbix_agent2.conf'
 Install-PackageIfMissing $smart 'smartmontools' '7.5' 'https://github.com/smartmontools/smartmontools/releases/download/RELEASE_7_5/smartmontools-7.5.win32-setup.exe' '896337FCC253220614CF8CDBD5CF2321C5AA326A37A04160A672A281E6104C70' 'exe'
 Install-PackageIfMissing $agent 'Zabbix Agent 2' '7.0.19' 'https://cdn.zabbix.com/zabbix/binaries/stable/7.0/7.0.19/zabbix_agent2-7.0.19-windows-amd64-openssl.msi' '8806383AF824F085464C9FC2B2C067FEBB0EFCF34FC48EA95BA9310B56509C9C' 'msi'
 if (-not (Test-Path -LiteralPath $conf)) { throw "Agent configuration not found: $conf" }
