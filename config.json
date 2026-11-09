@@ -1,7 +1,7 @@
 {
   "name": "Zabbix Installer",
   "shortName": "zabbix",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "author": "sokol549",
   "description": "Install Zabbix Agent 2 on Windows using MeshCentral.",
   "hasAdminPanel": false,
