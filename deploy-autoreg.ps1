@@ -27,8 +27,33 @@ if (Test-Path -LiteralPath 'C:\zabbix\autoregistration.psk') {
 function Install-PackageIfMissing($Path, $Id, $Version, $Url, $Sha256, $Kind) {
     if (Test-Path -LiteralPath $Path) { return }
     $installer = Join-Path $env:TEMP $(if ($Kind -eq 'msi') { 'zabbix-agent2-7.0.19.msi' } else { 'smartmontools-7.5.exe' })
-    Write-Host "Downloading $Id..."
-    Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $installer
+    $bundled = if ($Id -eq 'smartmontools') { Join-Path $PSScriptRoot 'smartmontools-7.5.win32-setup.exe' } else { $null }
+    if ($bundled -and (Test-Path -LiteralPath $bundled)) {
+        Write-Host "Using bundled $Id installer."
+        if ((Get-FileHash -LiteralPath $bundled -Algorithm SHA256).Hash -ne $Sha256) { throw "Checksum mismatch for bundled $Id; installation stopped." }
+        Copy-Item -LiteralPath $bundled -Destination $installer -Force
+    } else {
+        $sources = @($Url)
+        if ($Id -eq 'smartmontools') { $sources = @('https://downloads.sourceforge.net/project/smartmontools/smartmontools/7.5/smartmontools-7.5.win32-setup.exe', $Url) }
+        $downloaded = $false
+        foreach ($source in $sources) {
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+                try {
+                    Write-Host "Downloading $Id (attempt $attempt): $source"
+                    Invoke-WebRequest -UseBasicParsing -Uri $source -OutFile $installer -TimeoutSec 60
+                    if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne $Sha256) { throw "Checksum mismatch for $Id." }
+                    $downloaded = $true
+                    break
+                } catch {
+                    Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
+                    Write-Warning "Download failed: $($_.Exception.Message)"
+                    if ($attempt -lt 3) { Start-Sleep -Seconds (2 * $attempt) }
+                }
+            }
+            if ($downloaded) { break }
+        }
+        if (-not $downloaded) { throw "Could not download a verified $Id installer from the available sources." }
+    }
     if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne $Sha256) { throw "Checksum mismatch for $Id; installation stopped." }
     if ($Kind -eq 'msi') {
         $process = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $installer + '"'), '/qn', '/norestart', 'SERVER=127.0.0.1') -Wait -PassThru
