@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 [CmdletBinding()]
-param([string]$Server = '160.5.219.29', [string]$Hostname = $env:COMPUTERNAME, [string]$Site, [string]$RegistrationKey)
+param([string]$Server = '160.5.219.29', [string]$Hostname = $env:COMPUTERNAME, [string]$Site, [string]$RegistrationKey, [ValidateSet('cash','occasional')][string]$Mode = 'occasional', [bool]$ResticMonitoring = $false)
 $ErrorActionPreference = 'Stop'
 if (-not $Site) { $Site = Read-Host 'Enter pharmacy name or number (Latin letters, digits, dash or underscore)' }
 $Site = $Site.Trim()
@@ -61,8 +61,14 @@ if ($RegistrationKey -and $psk -ine $RegistrationKey) { throw 'The existing regi
 & icacls.exe $pskPath /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Failed to secure the PSK file.' }
 $identity = 'kzvs-pharmacies-registration-v1'
-$lines = @(Get-Content -LiteralPath $conf | Where-Object { $_ -notmatch '^\s*(Server|ServerActive|Hostname|Plugins\.Smart\.Path|TLSConnect|TLSAccept|TLSPSKIdentity|TLSPSKFile|HostMetadata)\s*=' -and $_ -notmatch '^\s*UserParameter\s*=\s*windows\.temp\.cpu\s*,' })
-$lines += "Server=$Server", "ServerActive=$Server", "Hostname=$Hostname", "Plugins.Smart.Path=$smart", 'UserParameter=windows.temp.cpu,powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\zabbix\get_temp.ps1', 'HostMetadata=kzvs-pharmacy-windows-v1', 'TLSConnect=psk', 'TLSAccept=psk', "TLSPSKIdentity=$identity", "TLSPSKFile=$pskPath"
+$metadata = "kzvs-pharmacy-windows-v1 kzvs-mode-$Mode"
+if ($ResticMonitoring) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'restic-task-status.ps1') -Destination 'C:\zabbix\restic-task-status.ps1' -Force
+    $metadata += ' kzvs-restic-yes'
+} else { $metadata += ' kzvs-restic-no' }
+$lines = @(Get-Content -LiteralPath $conf | Where-Object { $_ -notmatch '^\s*(Server|ServerActive|Hostname|Plugins\.Smart\.Path|TLSConnect|TLSAccept|TLSPSKIdentity|TLSPSKFile|HostMetadata)\s*=' -and $_ -notmatch '^\s*UserParameter\s*=\s*windows\.temp\.cpu\s*,' -and $_ -notmatch '^\s*UserParameter\s*=\s*restic\.tasks\.get\s*,' })
+$lines += "Server=$Server", "ServerActive=$Server", "Hostname=$Hostname", "Plugins.Smart.Path=$smart", 'UserParameter=windows.temp.cpu,powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\zabbix\get_temp.ps1', "HostMetadata=$metadata", 'TLSConnect=psk', 'TLSAccept=psk', "TLSPSKIdentity=$identity", "TLSPSKFile=$pskPath"
+if ($ResticMonitoring) { $lines += 'UserParameter=restic.tasks.get,powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\zabbix\restic-task-status.ps1' }
 Copy-Item -LiteralPath $conf -Destination "$conf.before-zabbix-infra.bak" -Force
 Set-Content -LiteralPath $conf -Value $lines -Encoding ASCII
 & $agent -c $conf -t agent.ping
