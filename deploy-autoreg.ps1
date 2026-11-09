@@ -14,7 +14,15 @@ $existingConfig = 'C:\Program Files\Zabbix Agent 2\zabbix_agent2.conf'
 if ((Test-Path -LiteralPath $existingConfig) -and -not (Test-Path -LiteralPath 'C:\zabbix\autoregistration.psk')) { throw 'An existing agent configuration was detected. It was not changed; contact the administrator before migration.' }
 if (Test-Path -LiteralPath $existingConfig) {
     $currentHost = @(Get-Content -LiteralPath $existingConfig | Where-Object { $_ -match '^\s*Hostname\s*=' })
-    if ($currentHost.Count -ne 1 -or (($currentHost[0] -split '=',2)[1].Trim() -cne $Hostname)) { throw 'The agent is already registered with a different host name. No changes were made.' }
+    if ($currentHost.Count -ne 1) { throw 'Existing agent configuration must contain exactly one explicit Hostname. No changes were made.' }
+    $existingHost = ($currentHost[0] -split '=',2)[1].Trim()
+    if (-not $existingHost -or $existingHost.Length -gt 128 -or $existingHost -notmatch '^[A-Za-z0-9_. -]+$') { throw 'Existing agent Hostname is invalid or uses an unsupported format. No changes were made.' }
+    if ($existingHost -cne $Hostname) { Write-Host "Existing Zabbix host name preserved: $existingHost" }
+    $Hostname = $existingHost
+}
+if (Test-Path -LiteralPath 'C:\zabbix\autoregistration.psk') {
+    $existingKey = [IO.File]::ReadAllText('C:\zabbix\autoregistration.psk').Trim()
+    if ($existingKey -notmatch '^[0-9a-fA-F]{64}$' -or $existingKey -ine $RegistrationKey) { throw 'The existing registration key is invalid or differs from the supplied key. No changes were made.' }
 }
 function Install-PackageIfMissing($Path, $Id, $Version, $Url, $Sha256, $Kind) {
     if (Test-Path -LiteralPath $Path) { return }
