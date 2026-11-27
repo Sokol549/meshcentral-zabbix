@@ -366,10 +366,10 @@ module.exports = function (parent) {
                 <h3>Темплейты (шаблоны) для алертов при подключении новых ПК</h3>
                 <p class="zabbix-note" style="margin:0 0 8px">Укажите названия темплейтов Zabbix (по одному в строке или через запятую). Существующие темплейты хоста сохраняются.</p>
                 <div class="zabbix-settings-grid">
-                  <label>Общие для всех новых ПК<textarea class="zabbix-tpl-input" name="templatesCommon" placeholder="Windows by Zabbix agent active&#10;SMART by Zabbix agent 2 active&#10;Windows ACPI temperature"></textarea></label>
-                  <label>Профиль «Касса / постоянный ПК»<textarea class="zabbix-tpl-input" name="templatesCash" placeholder="KZVS pharmacy cash register availability"></textarea></label>
-                  <label>Профиль «По необходимости»<textarea class="zabbix-tpl-input" name="templatesOccasional" placeholder=""></textarea></label>
-                  <label>При включённом контроле Restic<textarea class="zabbix-tpl-input" name="templatesRestic" placeholder="Restic Windows scheduled tasks active"></textarea></label>
+                  <label>Общие для всех новых ПК<textarea class="zabbix-tpl-input" name="templatesCommon" placeholder="По одному темплейту в строке"></textarea></label>
+                  <label>Профиль «Касса / постоянный ПК»<textarea class="zabbix-tpl-input" name="templatesCash" placeholder="По одному темплейту в строке"></textarea></label>
+                  <label>Профиль «По необходимости»<textarea class="zabbix-tpl-input" name="templatesOccasional" placeholder="По одному темплейту в строке"></textarea></label>
+                  <label>При включённом контроле Restic<textarea class="zabbix-tpl-input" name="templatesRestic" placeholder="По одному темплейту в строке"></textarea></label>
                 </div>
                 <div id="zabbix-tpl-picker" hidden>
                   <div class="zabbix-picker-row">

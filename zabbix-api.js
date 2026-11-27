@@ -46,13 +46,13 @@ function settingsFilePath(datapath, userId) {
 
 function defaultSettings() {
   return {
-    apiUrl: '',
+    apiUrl: 'https://zabbix.it.kzvs.pro/api_jsonrpc.php',
     apiToken: '',
     autoApplyTemplates: true,
-    templatesCommon: '',
-    templatesCash: '',
+    templatesCommon: 'Windows by Zabbix agent active\nSMART by Zabbix agent 2 active\nWindows ACPI temperature',
+    templatesCash: 'KZVS pharmacy cash register availability',
     templatesOccasional: '',
-    templatesRestic: ''
+    templatesRestic: 'Restic Windows scheduled tasks active'
   };
 }
 
