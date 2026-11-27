@@ -585,6 +585,9 @@ module.exports = function (parent) {
           return;
         }
         self.status('Привязка темплейтов в Zabbix…');
+        if (self.bulk && self.bulk.entries && self.bulk.entries[self.bulk.index] && self.bulk.entries[self.bulk.index].result) {
+          self.bulk.entries[self.bulk.index].result.textContent = 'Привязка темплейтов в Zabbix…';
+        }
         this.downloadRemoteText(nodeid, 'C:/zabbix/ZabbixMesh-install.log', function (err, text) {
           var hostname = err ? '' : self.extractHostnameFromLog(text);
           if (!hostname) {
@@ -990,11 +993,11 @@ module.exports = function (parent) {
           }
           self.markInstalled(nodeid);
           if (self.shouldApplyTemplates(cfg)) {
+            ended = true;
             clearInterval(interval);
             clearTimeout(timer);
             try { redirect.Stop(); } catch (e) {}
             self.applyConfiguredTemplates(nodeid, cfg, function (finalMsg) {
-              ended = true;
               self.busy = false;
               self.status(finalMsg);
               if (self.bulk) self.bulkDone('ok', finalMsg);
