@@ -222,19 +222,43 @@ module.exports = function (parent) {
       populateSettingsForm: function (s) {
         var form = document.querySelector('#zabbix-dialog form');
         if (!form || !s) return;
-        form.elements.apiUrl.value = s.apiUrl || '';
-        form.elements.apiToken.value = '';
-        form.elements.autoApplyTemplates.checked = s.autoApplyTemplates !== false;
-        form.elements.templatesCommon.value = s.templatesCommon || '';
-        form.elements.templatesCash.value = s.templatesCash || '';
-        form.elements.templatesOccasional.value = s.templatesOccasional || '';
-        form.elements.templatesRestic.value = s.templatesRestic || '';
+        if (!form._dirtySettings || !form._dirtySettings.apiUrl) form.elements.apiUrl.value = s.apiUrl || '';
+        if (!form._dirtySettings || !form._dirtySettings.apiToken) form.elements.apiToken.value = '';
+        if (!form._dirtySettings || !form._dirtySettings.autoApplyTemplates) form.elements.autoApplyTemplates.checked = s.autoApplyTemplates !== false;
+        if (!form._dirtySettings || !form._dirtySettings.templatesCommon) form.elements.templatesCommon.value = s.templatesCommon || '';
+        if (!form._dirtySettings || !form._dirtySettings.templatesCash) form.elements.templatesCash.value = s.templatesCash || '';
+        if (!form._dirtySettings || !form._dirtySettings.templatesOccasional) form.elements.templatesOccasional.value = s.templatesOccasional || '';
+        if (!form._dirtySettings || !form._dirtySettings.templatesRestic) form.elements.templatesRestic.value = s.templatesRestic || '';
+        form.elements.apiToken.placeholder = s.hasApiToken
+          ? 'Токен сохранён на сервере (введите новый только для замены)'
+          : 'Вставьте API-токен Zabbix';
         var tokenState = document.getElementById('zabbix-token-state');
         var clearBtn = document.getElementById('zabbix-clear-token');
         if (tokenState) {
           tokenState.textContent = s.hasApiToken ? 'API-токен сохранён на сервере.' : 'API-токен не задан.';
+          tokenState.style.color = s.hasApiToken ? '#15803d' : '#475569';
         }
         if (clearBtn) clearBtn.hidden = !s.hasApiToken;
+      },
+
+      queueSettingsSave: function (form) {
+        var self = this;
+        clearTimeout(form._saveTimer);
+        form._saveTimer = setTimeout(function () {
+          self.flushSettingsSave(form, true);
+        }, 600);
+      },
+
+      flushSettingsSave: function (form, automatic) {
+        if (!form || !form._saveTimer) return;
+        clearTimeout(form._saveTimer);
+        form._saveTimer = null;
+        try {
+          this.send('saveSettings', { settings: this.readSettingsForm(form, false), automatic: Boolean(automatic) });
+          form._dirtySettings = {};
+        } catch (e) {
+          this.settingsStatus('Ошибка: ' + e.message);
+        }
       },
 
       readSettingsForm: function (form, clearToken) {
@@ -403,7 +427,21 @@ module.exports = function (parent) {
         this.activeTab = 'install';
 
         Array.from(d.querySelectorAll('.zabbix-tab')).forEach(function (tabBtn) {
-          tabBtn.onclick = function () { self.switchTab(tabBtn.dataset.tab); };
+          tabBtn.onclick = function () {
+            if (self.activeTab === 'settings') self.flushSettingsSave(form, true);
+            self.switchTab(tabBtn.dataset.tab);
+          };
+        });
+
+        form._dirtySettings = {};
+        ['apiUrl', 'apiToken', 'autoApplyTemplates', 'templatesCommon', 'templatesCash', 'templatesOccasional', 'templatesRestic'].forEach(function (fieldName) {
+          var el = form.elements[fieldName];
+          if (!el) return;
+          var evt = el.type === 'checkbox' ? 'change' : 'input';
+          el.addEventListener(evt, function () {
+            form._dirtySettings[fieldName] = true;
+            self.queueSettingsSave(form);
+          });
         });
 
         document.getElementById('zabbix-site-name').onclick = function () {
@@ -422,15 +460,19 @@ module.exports = function (parent) {
 
         var closeFn = function () {
           if (self.busy || self.bulk) return;
+          self.flushSettingsSave(form, true);
           d.remove();
         };
         document.getElementById('zabbix-close').onclick = closeFn;
         document.getElementById('zabbix-settings-close').onclick = closeFn;
 
         document.getElementById('zabbix-save-settings').onclick = function () {
+          clearTimeout(form._saveTimer);
+          form._saveTimer = null;
           self.settingsStatus('Сохранение настроек…');
           try {
             self.send('saveSettings', { settings: self.readSettingsForm(form, false) });
+            form._dirtySettings = {};
           } catch (e) {
             self.settingsStatus('Ошибка: ' + e.message);
           }
@@ -456,7 +498,9 @@ module.exports = function (parent) {
           var current = targetField.value.split(/[\r\n,;]+/).map(function (s) { return s.trim(); }).filter(Boolean);
           if (current.indexOf(select.value) === -1) {
             targetField.value = current.concat([select.value]).join('\n');
-            self.settingsStatus('Добавлен темплейт "' + select.value + '". Нажмите «Сохранить настройки».');
+            form._dirtySettings[targetName] = true;
+            self.queueSettingsSave(form);
+            self.settingsStatus('Добавлен темплейт "' + select.value + '".');
           } else {
             self.settingsStatus('Темплейт "' + select.value + '" уже есть в списке.');
           }
